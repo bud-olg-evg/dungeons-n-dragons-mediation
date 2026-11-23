@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Игра</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background-color: #14241a;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    color: #eee;
+    font-family: Arial, sans-serif;
+  }
+
+  .screen { display: none; height: 100%; }
+  .screen.active { display: flex; }
+
+  /* ===== ЭКРАН ВЫБОРА ===== */
+
+  #screen-select {
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 24px; padding: 30px; overflow-y: auto;
+  }
+
+  h1 { font-size: 28px; font-weight: normal; letter-spacing: 2px; color: #aaa; text-align: center; }
+
+  .turn-banner { font-size: 24px; font-weight: bold; padding: 10px 28px; border-radius: 14px; text-align: center; transition: 0.3s; letter-spacing: 1px; }
+  .turn-banner.p1 { color: #ffb39a; background: rgba(224,122,95,0.18); border: 2px solid #e07a5f; animation: pulse-red 1.4s infinite; }
+  .turn-banner.p2 { color: #a9d3f5; background: rgba(95,168,224,0.18); border: 2px solid #5fa8e0; animation: pulse-blue 1.4s infinite; }
+  .turn-banner.done { color: #b8f0b3; background: rgba(111,192,106,0.18); border: 2px solid #6fc06a; animation: none; }
+
+  @keyframes pulse-red { 0%,100% { box-shadow: 0 0 0 0 rgba(224,122,95,0.5);} 50% { box-shadow: 0 0 22px 6px rgba(224,122,95,0.35);} }
+  @keyframes pulse-blue { 0%,100% { box-shadow: 0 0 0 0 rgba(95,168,224,0.5);} 50% { box-shadow: 0 0 22px 6px rgba(95,168,224,0.35);} }
+
+  .gallery { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 1100px; }
+
+  .character {
+    background: #1a1a1a; border: 2px solid #333; border-radius: 16px;
+    padding: 16px; width: 190px; display: flex; flex-direction: column;
+    align-items: center; gap: 10px; cursor: pointer; transition: 0.2s;
+  }
+  .character:hover { border-color: #777; background: #222; transform: translateY(-4px); }
+  .character.locked { opacity: 0.4; pointer-events: none; }
+  .character.taken-1 { border-color: #e07a5f; }
+  .character.taken-2 { border-color: #5fa8e0; }
+  .character.taken-1.taken-2 { border-color: #9b59b6; box-shadow: 0 0 12px rgba(155,89,182,0.4); }
+
+  .portrait { position: relative; width: 120px; height: 120px; border-radius: 50%; overflow: hidden; border: 3px solid #444; background: #0d1a12; display: flex; align-items: center; justify-content: center; font-size: 54px; }
+  .portrait img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 1; }
+
+  .character .name { font-size: 18px; font-weight: bold; }
+  .character .trait { font-size: 12px; color: #888; font-style: italic; }
+
+  .stats { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .stat { display: flex; flex-direction: column; gap: 3px; }
+  .stat .label { font-size: 10px; color: #999; display: flex; justify-content: space-between; align-items: baseline; }
+  .stat .value { font-size: 11px; font-weight: bold; color: #ccc; }
+  .pips { display: flex; gap: 3px; }
+  .pip { width: 100%; height: 10px; border-radius: 3px; background: #2a2a2a; border: 1px solid #3a3a3a; }
+  .pip.filled.speak { background: #e07a5f; border-color: #e07a5f; }
+  .pip.filled.listen { background: #5fa8e0; border-color: #5fa8e0; }
+  .pip.filled.yield { background: #6fc06a; border-color: #6fc06a; }
+
+  .choosers { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; }
+  .chooser { background: rgba(0,0,0,0.4); border: 2px dashed #555; border-radius: 16px; padding: 14px 22px; min-width: 240px; text-align: center; transition: 0.3s; opacity: 0.55; }
+  .chooser.active { opacity: 1; border-style: solid; transform: scale(1.05); }
+  .chooser#chooser-1.active { border-color: #e07a5f; background: rgba(224,122,95,0.15); animation: pulse-red 1.4s infinite; }
+  .chooser#chooser-2.active { border-color: #5fa8e0; background: rgba(95,168,224,0.15); animation: pulse-blue 1.4s infinite; }
+  .chooser.picked { border-style: solid; }
+  .chooser#chooser-1.picked { border-color: #e07a5f; background: rgba(224,122,95,0.12); }
+  .chooser#chooser-2.picked { border-color: #5fa8e0; background: rgba(95,168,224,0.12); }
+  .chooser.ready { border-style: solid; border-color: #6fc06a; background: rgba(111,192,106,0.12); opacity: 1; animation: none; transform: none; }
+  .chooser .who { font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+  .chooser .pick { font-size: 14px; color: #999; }
+  .chooser.picked .pick { color: #eee; }
+  .chooser .actions { margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .chooser .reset { background: transparent; color: #888; border: 1px solid #555; border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; display: none; }
+  .chooser .reset:hover { color: #eee; border-color: #999; }
+  .chooser.picked .reset { display: inline-block; }
+  .chooser .ready-btn { background: #6fc06a; color: #102414; border: 2px solid #6fc06a; border-radius: 8px; padding: 5px 16px; font-size: 13px; font-weight: bold; cursor: pointer; display: none; }
+  .chooser .ready-btn:hover { background: #8ad884; }
+  .chooser.picked .ready-btn { display: inline-block; }
+  .chooser.ready .reset, .chooser.ready .ready-btn { display: none; }
+  .chooser.ready .pick::after { content: " ✓"; color: #6fc06a; font-weight: bold; }
+
+  .status { font-size: 17px; color: #ccc; text-align: center; min-height: 22px; }
+  .status strong { color: #fff; }
+
+  /* ===== ЭКРАН КАРТЫ ===== */
+
+  #screen-map { position: relative; flex-direction: column; height: 100%; }
+
+  .top-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 12px 18px; pointer-events: none;
+  }
+  .top-bar > * { pointer-events: auto; }
+
+  .player-badge {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(10, 18, 12, 0.85); border: 2px solid #333;
+    border-radius: 14px; padding: 6px 14px; cursor: pointer;
+    transition: 0.3s; backdrop-filter: blur(4px);
+  }
+  .player-badge.p1 { border-color: #e07a5f; }
+  .player-badge.p2 { border-color: #5fa8e0; }
+  .player-badge:hover { background: rgba(20, 34, 24, 0.95); }
+  .player-badge.active-turn { transform: scale(1.05); }
+  .player-badge.p1.active-turn { animation: pulse-red 1.4s infinite; }
+  .player-badge.p2.active-turn { animation: pulse-blue 1.4s infinite; }
+
+  .player-badge .avatar {
+    width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+    background: #0d1a12; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; border: 2px solid #444; flex-shrink: 0; position: relative;
+  }
+  .player-badge .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .player-badge .info { display: flex; flex-direction: column; }
+  .player-badge .who { font-size: 11px; color: #888; }
+  .player-badge .pname { font-size: 15px; font-weight: bold; }
+  .player-badge .hint { font-size: 10px; color: #6fc06a; margin-top: 1px; display: none; }
+  .player-badge.active-turn .hint { display: block; }
+
+  .map-title {
+    font-size: 15px; color: #9bbf9e; letter-spacing: 1px;
+    background: rgba(10, 18, 12, 0.75); padding: 6px 16px;
+    border-radius: 10px; border: 1px solid #2c4a34;
+  }
+
+  /* Карта: квадратные клетки, центрируется */
+  .map-full {
+    flex: 1;
+    display: grid;
+    gap: 4px;
+    padding: 70px 8px 200px 8px;
+    background: radial-gradient(ellipse at center, #2f5238 0%, #1c3223 70%, #14241a 100%);
+    overflow: auto;
+    justify-content: center;
+    align-content: start;
+  }
+
+  .map-cell {
+  position: relative;
+  background: rgba(58, 94, 68, 0.35);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, box-shadow 0.15s;
+  width: min(20vw, 20vh, 225px);
+  height: min(20vw, 20vh, 225px);
+  overflow: hidden;
+}
+  .map-cell.valid-target { cursor: pointer; background: rgba(110, 190, 130, 0.3); box-shadow: inset 0 0 0 2px #8ad884; }
+  .map-cell.valid-target:hover { background: rgba(140, 220, 160, 0.45); }
+  .map-cell.filled { border: none; }
+
+  .map-cell.meeting-cell { box-shadow: inset 0 0 0 3px #ffd76a; animation: meetingGlow 1.2s infinite alternate; }
+  @keyframes meetingGlow {
+    0%   { box-shadow: inset 0 0 0 3px #ffd76a, 0 0 6px rgba(255,215,106,0.4); }
+    100% { box-shadow: inset 0 0 0 3px #ffd76a, 0 0 18px rgba(255,215,106,0.9); }
+  }
+
+  .map-cell.return-cell {
+    box-shadow: inset 0 0 0 3px #8ad884, 0 0 16px rgba(138,216,132,0.8);
+    cursor: pointer;
+    animation: returnGlow 1s infinite alternate;
+  }
+  @keyframes returnGlow {
+    0%   { box-shadow: inset 0 0 0 3px #8ad884, 0 0 8px rgba(138,216,132,0.5); }
+    100% { box-shadow: inset 0 0 0 3px #8ad884, 0 0 22px rgba(138,216,132,1); }
+  }
+
+  /* Хижина */
+
+  .hut-cell {
+  background: linear-gradient(180deg, #4a3a1a, #2a1f0a) !important;
+  border: 2px solid #8a6a3a !important;
+  box-shadow: inset 0 0 20px rgba(255,180,80,0.3);
+  cursor: pointer;
+}
+/* Картинка хижины — на весь слой клетки */
+.hut-cell .hut-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  border-radius: 6px;
+  display: block;
+}
+/* Эмодзи-фолбэк: виден только если картинки нет */
+.hut-cell .hut-icon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(28px, 5vw, 64px);
+  filter: drop-shadow(0 2px 4px #000);
+  z-index: 2;
+  pointer-events: none;
+  display: none;
+}
+.hut-cell.no-img .hut-icon { display: block; }
+/* Подпись снизу — поверх картинки */
+.hut-cell .hut-label {
+  position: absolute;
+  bottom: 4px; left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(8px, 1vw, 12px);
+  color: #ffd76a;
+  text-shadow: 0 1px 3px #000, 0 0 6px #000;
+  white-space: nowrap;
+  z-index: 3;
+  pointer-events: none;
+  background: rgba(0,0,0,0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.hut-cell:hover { box-shadow: inset 0 0 30px rgba(255,180,80,0.6); }
+.hut-cell.hut-done { opacity: 0.4; filter: grayscale(1); }
+
+  /* Фишки */
+
+  .token {
+    position: absolute;
+    width: clamp(24px, 3.2vw, 40px);
+    height: clamp(24px, 3.2vw, 40px);
+    border-radius: 50%; overflow: hidden;
+    background: #0d1a12; border: 3px solid #444;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(12px, 1.6vw, 18px); z-index: 5;
+    transition: left 0.35s, top 0.35s;
+  }
+  .token img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .token.p1 { border-color: #e07a5f; box-shadow: 0 0 12px rgba(224,122,95,0.8); }
+  .token.p2 { border-color: #5fa8e0; box-shadow: 0 0 12px rgba(95,168,224,0.8); }
+
+  /* ===== НИЖНЯЯ ПАНЕЛЬ ===== */
+
+  .deck-bar {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 40;
+    padding: 0 16px 12px; pointer-events: none;
+  }
+  .deck-bar > * { pointer-events: auto; }
+
+  .fan {
+    display: flex; justify-content: center; align-items: flex-end;
+    min-height: 0; height: 0; overflow: visible;
+    transition: height 0.3s; position: relative;
+  }
+  .fan.open { height: 190px; }
+
+  .fan-card {
+    position: absolute; bottom: 0;
+    width: 110px; height: 155px;
+    background: linear-gradient(160deg, #2b4533, #16281d);
+    border: 2px solid #4a7052; border-radius: 10px;
+    padding: 8px; display: flex; flex-direction: column; align-items: center;
+    gap: 4px; text-align: center; cursor: pointer;
+    transition: transform 0.25s, box-shadow 0.2s, border-color 0.2s;
+    transform-origin: bottom center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    left: 50%;
+  }
+  .fan-card:hover {
+    border-color: #ffd76a;
+    box-shadow: 0 0 20px rgba(255,215,106,0.6);
+    z-index: 200 !important;
+    transform: translateX(var(--tx)) translateY(-18px) rotate(var(--rot)) scale(1.08) !important;
+  }
+  .fan-card .fc-icon { font-size: 30px; line-height: 1; }
+  .fan-card .fc-name { font-size: 11px; font-weight: bold; color: #dfeadf; line-height: 1.1; }
+  .fan-card .fc-desc { font-size: 8px; color: #8aa38c; line-height: 1.15; }
+
+  .decks {
+    display: flex; justify-content: center; align-items: flex-end;
+    gap: 30px; padding-top: 6px;
+  }
+
+  .deck {
+    width: 92px; height: 128px; border-radius: 10px;
+    position: relative; cursor: pointer; transition: transform 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; text-align: center; padding: 8px;
+  }
+  .deck:hover { transform: translateY(-6px); }
+  .deck.selected { transform: translateY(-8px); }
+
+  .deck .deck-icon { font-size: 30px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6)); }
+  .deck .deck-name { font-size: 11px; font-weight: bold; line-height: 1.1; }
+  .deck .deck-count {
+    position: absolute; top: -6px; right: -6px;
+    background: #ffd76a; color: #1a1a0a;
+    font-size: 12px; font-weight: bold;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+
+  .deck.obstacle { background: linear-gradient(160deg, #5a3330, #381d1b); border: 2px solid #8a4e47; color: #f0c9c4; }
+  .deck.obstacle.selected { border-color: #ffb39a; box-shadow: 0 0 20px rgba(224,122,95,0.6); }
+  .deck.resource { background: linear-gradient(160deg, #2e5a38, #18301f); border: 2px solid #4a8055; color: #c9f0d0; }
+  .deck.resource.selected { border-color: #8ad884; box-shadow: 0 0 20px rgba(111,192,106,0.6); }
+  .deck.point { background: linear-gradient(160deg, #5a4a1f, #382d10); border: 2px solid #8a7530; color: #f0e4b8; }
+  .deck.point.selected { border-color: #ffd76a; box-shadow: 0 0 20px rgba(255,215,106,0.6); }
+
+  .map-hint {
+    text-align: center; font-size: 14px; color: #ccc;
+    padding: 6px 16px; margin-top: 4px;
+    background: rgba(10, 18, 12, 0.85);
+    border-radius: 10px; border: 1px solid #2c4a34;
+    min-height: 32px; display: inline-block;
+    position: relative; left: 50%; transform: translateX(-50%);
+    backdrop-filter: blur(4px); max-width: 90%;
+  }
+  .map-hint strong { color: #ffd76a; }
+
+  .fan-close {
+    position: absolute; top: -36px; right: 0;
+    background: rgba(10, 18, 12, 0.9); color: #ccc;
+    border: 1px solid #555; border-radius: 8px;
+    padding: 4px 12px; font-size: 12px; cursor: pointer;
+  }
+  .fan-close:hover { color: #fff; border-color: #999; }
+
+  /* ===== РИСУНКИ РЕЛЬЕФА (CSS-фолбэк) ===== */
+
+  .map-cell .terrain-drawing { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .map-cell .terrain-drawing .tlabel {
+    font-size: clamp(6px, 0.7vw, 10px); line-height: 1;
+    text-align: center; padding: 2px 3px; color: #fff;
+    text-shadow: 0 1px 3px #000, 0 0 5px #000; z-index: 3;
+    background: rgba(0,0,0,0.35); border-radius: 3px;
+    margin-bottom: 2px; max-width: 96%;
+  }
+  .draw { position: absolute; inset: 0; overflow: hidden; }
+
+  .terrain-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 2;
+    border-radius: 4px;
+  }
+
+  .draw-swamp { background: radial-gradient(ellipse at 30% 60%, #3a5a2a 0%, transparent 50%), radial-gradient(ellipse at 70% 50%, #2e4a22 0%, transparent 55%), linear-gradient(180deg, #1e3018, #16261a); }
+  .draw-swamp::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 20% 70%, #4a6a30 3px, transparent 4px), radial-gradient(circle at 50% 60%, #4a6a30 3px, transparent 4px), radial-gradient(circle at 80% 75%, #4a6a30 3px, transparent 4px), radial-gradient(circle at 35% 40%, #3a5a25 2px, transparent 3px), radial-gradient(circle at 65% 35%, #3a5a25 2px, transparent 3px); opacity: 0.8; }
+
+  .draw-fog { background: linear-gradient(180deg, #4a5560, #3a4550, #2e3840); }
+  .draw-fog::before { content: ""; position: absolute; inset: -20%; background: radial-gradient(ellipse at 30% 50%, rgba(200,210,220,0.45) 0%, transparent 45%), radial-gradient(ellipse at 70% 40%, rgba(180,195,210,0.4) 0%, transparent 50%), radial-gradient(ellipse at 50% 70%, rgba(220,225,235,0.3) 0%, transparent 40%); animation: fogMove 6s ease-in-out infinite alternate; }
+  @keyframes fogMove { 0% { transform: translateX(-8%) translateY(0);} 100% { transform: translateX(8%) translateY(-3%);} }
+
+  .draw-wall { background: linear-gradient(180deg, #3a3a3a, #222); }
+  .draw-wall::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; top: 20%; background: repeating-linear-gradient(0deg, #555 0 6px, #444 6px 7px), repeating-linear-gradient(90deg, transparent 0 14px, #333 14px 16px); }
+
+  .draw-chasm { background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%); }
+  .draw-chasm::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, #000 70%), radial-gradient(ellipse at 50% 100%, #2a1a1a 0%, transparent 60%); }
+  .draw-chasm::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(180deg, #3a3a2a, transparent); }
+
+  .draw-trap { background: linear-gradient(180deg, #2a2a1a, #1a1a0f); }
+  .draw-trap::before { content: ""; position: absolute; inset: 0; background: conic-gradient(from 0deg at 50% 50%, transparent 0 15deg, #888 15deg 20deg, transparent 20deg 45deg, #888 45deg 50deg, transparent 50deg 75deg, #888 75deg 80deg, transparent 80deg 105deg, #888 105deg 110deg, transparent 110deg 135deg, #888 135deg 140deg, transparent 140deg 165deg, #888 165deg 170deg, transparent 170deg 195deg, #888 195deg 200deg, transparent 200deg 225deg, #888 225deg 230deg, transparent 230deg 255deg, #888 255deg 260deg, transparent 260deg 285deg, #888 285deg 290deg, transparent 290deg 315deg, #888 315deg 320deg, transparent 320deg 345deg, #888 345deg 350deg, transparent 350deg); mask: radial-gradient(circle at 50% 50%, transparent 30%, black 32%, black 60%, transparent 62%); -webkit-mask: radial-gradient(circle at 50% 50%, transparent 30%, black 32%, black 60%, transparent 62%); }
+
+  .draw-liemire { background: radial-gradient(ellipse at 50% 60%, #3a2a4a 0%, transparent 55%), linear-gradient(180deg, #241a30, #1a1224); }
+  .draw-liemire::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 25% 40%, rgba(150,100,200,0.4) 2px, transparent 3px), radial-gradient(circle at 55% 30%, rgba(150,100,200,0.35) 2px, transparent 3px), radial-gradient(circle at 75% 60%, rgba(150,100,200,0.4) 2px, transparent 3px), radial-gradient(circle at 40% 75%, rgba(150,100,200,0.3) 2px, transparent 3px); }
+  .draw-liemire::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 60% 50%, rgba(180,120,240,0.25) 0%, transparent 40%); animation: liemireGlow 3s ease-in-out infinite alternate; }
+  @keyframes liemireGlow { 0% { opacity: 0.4; } 100% { opacity: 0.9; } }
+
+  .draw-fearwood { background: linear-gradient(180deg, #1a2a1a, #0f1a10); }
+  .draw-fearwood::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 20% 80%, #2a4a2a 0%, transparent 30%), radial-gradient(ellipse at 50% 85%, #223a22 0%, transparent 35%), radial-gradient(ellipse at 80% 80%, #2a4a2a 0%, transparent 30%), radial-gradient(ellipse at 35% 70%, #1a301a 0%, transparent 25%), radial-gradient(ellipse at 65% 72%, #1a301a 0%, transparent 25%); }
+  .draw-fearwood::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 80%); }
+
+  .draw-mirror { background: linear-gradient(180deg, #2a3a4a, #1a2a3a); }
+  .draw-mirror::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 0%, rgba(150,200,240,0.3) 50%, rgba(100,160,200,0.5) 100%); }
+  .draw-mirror::after { content: ""; position: absolute; left: 0; right: 0; top: 45%; height: 55%; background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(200,230,255,0.2) 8px 9px); animation: mirrorRipple 4s linear infinite; }
+  @keyframes mirrorRipple { 0% { transform: translateX(0); opacity: 0.4;} 50% { opacity: 0.7;} 100% { transform: translateX(9px); opacity: 0.4;} }
+
+  .draw-labyrinth { background: linear-gradient(180deg, #2a2a3a, #1a1a2a); }
+  .draw-labyrinth::before { content: ""; position: absolute; inset: 10%; border: 2px solid #555; border-radius: 4px; box-shadow: inset 0 0 0 6px #2a2a3a, inset 0 0 0 8px #666, inset 0 0 0 14px #2a2a3a, inset 0 0 0 16px #555; }
+
+  .draw-stubborn { background: linear-gradient(180deg, #3a2e20, #1f1810); }
+  .draw-stubborn::before { content: ""; position: absolute; left: 10%; right: 10%; bottom: 0; top: 25%; background: repeating-linear-gradient(0deg, #5a4a35 0 8px, #4a3a28 8px 10px), repeating-linear-gradient(90deg, transparent 0 18px, #3a2a1a 18px 20px); border: 2px solid #6a5a45; border-radius: 3px 3px 0 0; }
+
+  .draw-honesty { background: linear-gradient(180deg, #1a3a3a, #0f2424); }
+  .draw-honesty::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(120,220,220,0.5) 0%, transparent 45%); }
+  .draw-honesty::after { content: ""; position: absolute; left: 50%; bottom: 20%; width: 4px; height: 60%; background: linear-gradient(180deg, transparent, rgba(180,240,240,0.8), transparent); transform: translateX(-50%); animation: honestyShimmer 2s ease-in-out infinite alternate; }
+  @keyframes honestyShimmer { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+
+  .draw-chest { background: linear-gradient(180deg, #3a2a1a, #1f150a); }
+  .draw-chest::before { content: ""; position: absolute; left: 20%; right: 20%; bottom: 22%; top: 35%; background: linear-gradient(180deg, #8a5a2a, #6a3a1a); border: 2px solid #4a2a0a; border-radius: 3px; box-shadow: inset 0 2px 0 rgba(255,220,150,0.3); }
+  .draw-chest::after { content: "🔒"; position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); font-size: clamp(8px, 1.2vw, 16px); }
+
+  .draw-lighthouse { background: linear-gradient(180deg, #1a2a3a, #0f1a24); }
+  .draw-lighthouse::before { content: ""; position: absolute; left: 42%; right: 42%; bottom: 25%; top: 30%; background: repeating-linear-gradient(0deg, #e0e0e0 0 6px, #c04040 6px 12px); border-radius: 2px; }
+  .draw-lighthouse::after { content: ""; position: absolute; left: 50%; top: 25%; width: 60%; height: 40%; background: radial-gradient(ellipse at 50% 0%, rgba(255,240,150,0.7) 0%, transparent 60%); transform: translateX(-50%); animation: lighthouseBeam 3s ease-in-out infinite alternate; }
+  @keyframes lighthouseBeam { 0% { opacity: 0.4; } 100% { opacity: 1; } }
+
+  .draw-path { background: linear-gradient(180deg, #2a3a1a, #1a2a10); }
+  .draw-path::before { content: ""; position: absolute; left: 30%; right: 30%; top: 0; bottom: 0; background: repeating-linear-gradient(180deg, #8a6a3a 0 10px, #6a4a2a 10px 12px); border-left: 2px solid #4a3a1a; border-right: 2px solid #4a3a1a; }
+
+  .draw-key { background: radial-gradient(circle at 50% 50%, #3a3a2a 0%, #1a1a10 80%); }
+  .draw-key::before { content: "🗝️"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(15deg); font-size: clamp(20px, 3.5vw, 40px); filter: sepia(1) brightness(0.8) drop-shadow(0 2px 4px #000); }
+
+  .draw-campfire { background: linear-gradient(180deg, #2a1a0a, #1a0f05); }
+  .draw-campfire::before { content: ""; position: absolute; left: 50%; bottom: 25%; width: 40%; height: 35%; transform: translateX(-50%); background: radial-gradient(ellipse at 50% 100%, #ff8030 0%, #ff4020 40%, #a02010 70%, transparent 100%); border-radius: 50% 50% 30% 30%; animation: fireFlicker 0.6s ease-in-out infinite alternate; filter: blur(1px); }
+  .draw-campfire::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 18%; height: 8%; background: linear-gradient(180deg, #5a3a1a, #3a2a10); border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.6); }
+  @keyframes fireFlicker { 0% { transform: translateX(-50%) scale(1, 1); opacity: 0.85; } 100% { transform: translateX(-50%) scale(1.08, 1.15); opacity: 1; } }
+
+  .draw-bridge { background: linear-gradient(180deg, #1a2a3a 0%, #0f1a24 100%); }
+  .draw-bridge::before { content: ""; position: absolute; left: 0; right: 0; bottom: 25%; top: 30%; background: repeating-linear-gradient(90deg, #8a6a3a 0 8px, #6a4a2a 8px 10px); border-top: 2px solid #4a3a1a; border-bottom: 2px solid #4a3a1a; }
+  .draw-bridge::after { content: ""; position: absolute; left: 0; right: 0; bottom: 22%; height: 6%; background: repeating-linear-gradient(90deg, transparent 0 12px, #5a4a2a 12px 14px); }
+
+  .draw-meadow { background: radial-gradient(ellipse at 50% 70%, #4a7a3a 0%, transparent 60%), linear-gradient(180deg, #2a4a1a, #1a3010); }
+  .draw-meadow::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 25% 60%, #ff6a8a 2px, transparent 3px), radial-gradient(circle at 45% 45%, #ffd76a 2px, transparent 3px), radial-gradient(circle at 65% 65%, #a0d0ff 2px, transparent 3px), radial-gradient(circle at 80% 40%, #ff6a8a 2px, transparent 3px), radial-gradient(circle at 35% 75%, #ffd76a 2px, transparent 3px); opacity: 0.85; }
+  .draw-meadow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 100%, rgba(160,220,140,0.3) 0%, transparent 50%); }
+
+  /* ===== МОДАЛКИ ===== */
+
+  .meeting-banner {
+    position: absolute; top: 78px; left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    z-index: 50;
+    background: linear-gradient(160deg, #5a4a1f, #382d10);
+    border: 3px solid #ffd76a; border-radius: 16px;
+    padding: 14px 24px;
+    box-shadow: 0 0 40px rgba(255,215,106,0.6);
+    display: none; align-items: center; gap: 16px;
+    animation: bannerIn 0.4s ease-out;
+  }
+  .meeting-banner.show { display: flex; }
+  @keyframes bannerIn {
+    from { transform: translateX(-50%) translateY(-40px); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(-20px); opacity: 1; }
+  }
+  .meeting-banner .mb-icon { font-size: 36px; }
+  .meeting-banner .mb-text { display: flex; flex-direction: column; }
+  .meeting-banner .mb-title { font-size: 18px; font-weight: bold; color: #ffe9a8; }
+  .meeting-banner .mb-sub { font-size: 13px; color: #d0c090; }
+  .meeting-banner button {
+    background: #ffd76a; color: #3a2a0a; border: none;
+    border-radius: 10px; padding: 10px 20px;
+    font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s;
+  }
+  .meeting-banner button:hover { background: #ffe9a8; transform: scale(1.05); }
+
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; backdrop-filter: blur(3px);
+  }
+  .modal.show { display: flex; }
+
+  .modal-card {
+    background: linear-gradient(160deg, #2b4533, #16281d);
+    border: 3px solid #ffd76a; border-radius: 20px;
+    padding: 28px 32px; max-width: 520px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    text-align: center;
+    animation: modalIn 0.35s ease-out;
+  }
+  @keyframes modalIn {
+    from { transform: scale(0.9) translateY(20px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .modal-card .mc-icon { font-size: 56px; margin-bottom: 12px; }
+  .modal-card .mc-title { font-size: 24px; font-weight: bold; color: #ffe9a8; margin-bottom: 10px; }
+  .modal-card .mc-text { font-size: 15px; color: #dfeadf; line-height: 1.5; margin-bottom: 20px; }
+  .modal-card button {
+    background: #6fc06a; color: #102414;
+    border: 2px solid #6fc06a; border-radius: 12px;
+    padding: 12px 28px; font-size: 16px; font-weight: bold;
+    cursor: pointer; transition: 0.2s;
+  }
+  .modal-card button:hover { background: #8ad884; transform: scale(1.03); }
+
+  .modal-card.caucus-card { border-color: #8ad884; }
+  .modal-card.caucus-card .mc-title { color: #b8f0b3; }
+
+  .finish-btn {
+    background: linear-gradient(160deg, #5a4a1f, #382d10);
+    color: #ffe9a8;
+    border: 2px solid #ffd76a;
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .finish-btn:hover {
+    background: linear-gradient(160deg, #7a6428, #4a3a14);
+    transform: scale(1.05);
+  }
+
+  .finish-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 200;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+    overflow-y: auto;
+  }
+  .finish-modal.show { display: flex; }
+
+  .finish-card {
+    background: linear-gradient(160deg, #2b4533, #16281d);
+    border: 3px solid #ffd76a;
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 900px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    text-align: center;
+    animation: modalIn 0.35s ease-out;
+  }
+
+  .finish-card h2 {
+    font-size: 24px;
+    color: #ffe9a8;
+    margin-bottom: 6px;
+    font-weight: bold;
+  }
+  .finish-card .finish-sub {
+    font-size: 14px;
+    color: #a8c0a8;
+    margin-bottom: 16px;
+  }
+
+  .finish-photo {
+    background: #1a2a1a;
+    border: 4px solid #444;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 18px;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.5);
+  }
+  .finish-photo canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 6px;
+  }
+
+  .finish-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .finish-actions button {
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    border: 2px solid;
+  }
+  .finish-actions .save-btn {
+    background: #6fc06a; color: #102414; border-color: #6fc06a;
+  }
+  .finish-actions .save-btn:hover { background: #8ad884; transform: scale(1.03); }
+  .finish-actions .back-btn {
+    background: transparent; color: #ccc; border-color: #666;
+  }
+  .finish-actions .back-btn:hover { color: #fff; border-color: #aaa; }
+
+  .results-card { max-width: 640px; }
+
+  .results-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    margin-bottom: 18px;
+  }
+  .results-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: #a8c0a8;
+    font-weight: bold;
+  }
+  .results-form input,
+  .results-form textarea {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid #4a7052;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #eee;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    resize: vertical;
+  }
+  .results-form input:focus,
+  .results-form textarea:focus {
+    outline: none;
+    border-color: #ffd76a;
+    background: rgba(0,0,0,0.6);
+  }
+  .results-form input[readonly] {
+    color: #b8f0b3;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== ЭКРАН ВЫБОРА ===== -->
+  <div class="screen active" id="screen-select">
+    <h1>Выберите персонажа</h1>
+    <div class="turn-banner p1" id="turn-banner">Сейчас выбирает Участник 1 ↓</div>
+
+    <div class="choosers">
+      <div class="chooser" id="chooser-1">
+        <div class="who">Участник 1</div>
+        <div class="pick">не выбрал</div>
+        <div class="actions">
+          <button class="reset" onclick="resetChoice(1)">Сбросить</button>
+          <button class="ready-btn" onclick="confirmChoice(1)">Готово</button>
+        </div>
+      </div>
+      <div class="chooser" id="chooser-2">
+        <div class="who">Участник 2</div>
+        <div class="pick">не выбрал</div>
+        <div class="actions">
+          <button class="reset" onclick="resetChoice(2)">Сбросить</button>
+          <button class="ready-btn" onclick="confirmChoice(2)">Готово</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+    <p class="status" id="status"></p>
+  </div>
+
+  <!-- ===== ЭКРАН КАРТЫ ===== -->
+  <div class="screen" id="screen-map">
+
+    <div class="top-bar">
+      <div class="player-badge p1" id="badge-1" onclick="selectPlayerOnMap(1)">
+        <div class="avatar" id="avatar-1">?</div>
+        <div class="info">
+          <div class="who">Участник 1</div>
+          <div class="pname" id="pname-1">—</div>
+          <div class="hint">▶ ваш ход</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="map-title" id="map-title">Карта медиации 10 × 6</div>
+        <button class="finish-btn" onclick="openFinish()">Завершение</button>
+      </div>
+
+      <div class="player-badge p2" id="badge-2" onclick="selectPlayerOnMap(2)">
+        <div class="avatar" id="avatar-2">?</div>
+        <div class="info">
+          <div class="who">Участник 2</div>
+          <div class="pname" id="pname-2">—</div>
+          <div class="hint">▶ ваш ход</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="meeting-banner" id="meeting-banner">
+      <div class="mb-icon">🤝</div>
+      <div class="mb-text">
+        <div class="mb-title">Стороны встретились!</div>
+        <div class="mb-sub">Оба дошли до точки встречи</div>
+      </div>
+      <button onclick="openMeeting()">Провести встречу</button>
+    </div>
+
+    <div class="map-full" id="map"></div>
+
+    <div class="deck-bar">
+      <div class="fan" id="fan"></div>
+
+      <div class="decks">
+        <div class="deck obstacle" id="deck-obstacle" onclick="openDeck('obstacle')">
+          <div class="deck-icon">🌫️</div>
+          <div class="deck-name">Препятствия</div>
+          <div class="deck-count" id="count-obstacle">10</div>
+        </div>
+        <div class="deck resource" id="deck-resource" onclick="openDeck('resource')">
+          <div class="deck-icon">💧</div>
+          <div class="deck-name">Ресурсы</div>
+          <div class="deck-count" id="count-resource">5</div>
+        </div>
+        <div class="deck point" id="deck-point" onclick="openDeck('point')">
+          <div class="deck-icon">🔥</div>
+          <div class="deck-name">Точки встречи</div>
+          <div class="deck-count" id="count-point">3</div>
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top: 4px;">
+        <div class="map-hint" id="map-hint">Нажмите на иконку своего персонажа сверху, чтобы начать ход</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка встречи -->
+  <div class="modal" id="meeting-modal">
+    <div class="modal-card">
+      <div class="mc-icon" id="mc-icon">🔥</div>
+      <div class="mc-title" id="mc-title">Встреча состоялась</div>
+      <div class="mc-text" id="mc-text"></div>
+      <button onclick="closeMeeting()">Завершить встречу</button>
+    </div>
+  </div>
+
+  <!-- Модалка кокуса -->
+  <div class="modal" id="caucus-modal">
+    <div class="modal-card caucus-card">
+      <div class="mc-icon">🏠</div>
+      <div class="mc-title">Кокус</div>
+      <div class="mc-text" id="caucus-text"></div>
+      <button onclick="closeCaucus()">Понятно</button>
+    </div>
+  </div>
+
+  <!-- Модалка завершения -->
+  <div class="finish-modal" id="finish-modal">
+    <div class="finish-card">
+      <h2>Карта медиации</h2>
+      <div class="finish-sub" id="finish-sub">—</div>
+      <div class="finish-photo">
+        <canvas id="finish-canvas" width="1000" height="600"></canvas>
+      </div>
+      <div class="finish-actions">
+        <button class="save-btn" onclick="saveFinish()">💾 Сохранить как изображение</button>
+        <button class="back-btn" onclick="closeFinish()">Вернуться к игре</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка итогов -->
+  <div class="finish-modal" id="results-modal">
+    <div class="finish-card results-card">
+      <h2>Итоги встречи</h2>
+      <div class="finish-sub">Заполните итоги медиации</div>
+
+      <div class="results-form">
+        <label>Участники
+          <input type="text" id="res-participants" readonly>
+        </label>
+        <label>Дата
+          <input type="date" id="res-date">
+        </label>
+        <label>Тема
+          <textarea id="res-topic" rows="2" placeholder="Что обсуждали?"></textarea>
+        </label>
+        <label>Решение
+          <textarea id="res-decision" rows="2" placeholder="Что решили?"></textarea>
+        </label>
+        <label>Договорённости
+          <textarea id="res-agreements" rows="2" placeholder="О чём договорились стороны?"></textarea>
+        </label>
+        <label>Следующие шаги
+          <textarea id="res-steps" rows="2" placeholder="Что делать дальше?"></textarea>
+        </label>
+        <label>Подпись медиатора
+          <input type="text" id="res-signature" placeholder="Введите имя">
+        </label>
+      </div>
+
+      <div class="finish-actions">
+        <button class="save-btn" onclick="saveResultsImage()">💾 Сохранить картинку</button>
+        <button class="save-btn" onclick="saveResultsText()">📄 Сохранить текст</button>
+        <button class="back-btn" onclick="startNewGame()">🔄 Новая игра</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const characters = [
+      { id: 'knight', icon: '🛡️', name: 'Рыцарь',     trait: 'смелость',          speak: 5, listen: 2, yield: 1, img: 'knight.png' },
+      { id: 'healer', icon: '💚', name: 'Лекарь',     trait: 'забота',            speak: 2, listen: 4, yield: 4, img: 'healer.png' },
+      { id: 'rogue',  icon: '🗡️', name: 'Плут',       trait: 'хитрость',          speak: 3, listen: 3, yield: 3, img: 'rogue.png'  },
+      { id: 'bard',   icon: '🎵', name: 'Бард',       trait: 'умение говорить',   speak: 5, listen: 2, yield: 2, img: 'bard.png'   },
+      { id: 'mage',   icon: '🔮', name: 'Волшебник',  trait: 'умение слушать',    speak: 2, listen: 5, yield: 3, img: 'mage.png'   },
+    ];
+
+    const terrains = [
+      { id: 'swamp',    cat: 'obstacle', icon: '🌫️', name: 'Болото Обиды',         desc: 'Кто-то застрял в обиде и не может двигаться дальше' },
+      { id: 'fog',      cat: 'obstacle', icon: '🌁', name: 'Туман Непонимания',    desc: '«Я не знаю, что он думает»' },
+      { id: 'wall',     cat: 'obstacle', icon: '🧱', name: 'Стена Молчания',       desc: 'Никто не говорит, непонятно, что происходит' },
+      { id: 'chasm',    cat: 'obstacle', icon: '⛰️', name: 'Пустота Разрыва',       desc: 'Глубокая рана, «как её перейти»' },
+      { id: 'trap',     cat: 'obstacle', icon: '🪤', name: 'Капкан Обвинений',     desc: 'Застрял, потому что повторяет «он виноват»' },
+      { id: 'liemire',  cat: 'obstacle', icon: '🌀', name: 'Трясина Лжи',          desc: 'Непонятно, чему верить' },
+      { id: 'fearwood', cat: 'obstacle', icon: '🌲', name: 'Лес Страхов',          desc: 'Страшно сделать шаг' },
+      { id: 'mirror',   cat: 'obstacle', icon: '🪞', name: 'Зеркальное Озеро',     desc: 'Каждый видит только себя' },
+      { id: 'labyrinth',cat: 'obstacle', icon: '🌐', name: 'Лабиринт Слухов',      desc: 'Никто не знает правды' },
+      { id: 'stubborn', cat: 'obstacle', icon: '🪨', name: 'Стена Упрямства',      desc: 'Не хочет уступать' },
+
+      { id: 'honesty',  cat: 'resource', icon: '💧', name: 'Источник Честности',   desc: 'Можно сказать правду и не бояться' },
+      { id: 'chest',    cat: 'resource', icon: '🧰', name: 'Сундук Ресурсов',      desc: 'Что персонаж может предложить' },
+      { id: 'lighthouse',cat:'resource', icon: '🗼', name: 'Маяк Надежды',         desc: 'Видно, что выход есть' },
+      { id: 'path',     cat: 'resource', icon: '🛤️', name: 'Тропа Компромисса',    desc: 'Узкая, но проходимая' },
+      { id: 'key',      cat: 'resource', icon: '🗝️', name: 'Ржавый Ключ',          desc: 'Старое обещание, общая дружба' },
+
+      { id: 'campfire', cat: 'point',    icon: '🔥', name: 'Костёр Переговоров',   desc: 'Стороны встречаются и договариваются' },
+      { id: 'bridge',   cat: 'point',    icon: '🌉', name: 'Мост Доверия',         desc: 'Соединяет «до» и «после»' },
+      { id: 'meadow',   cat: 'point',    icon: '🌿', name: 'Поляна Примирения',    desc: 'Передохнуть и поговорить' },
+    ];
+
+    const MAP_COLS = 10;
+    const MAP_ROWS = 6;
+    const HUT = { row: 0, col: MAP_COLS - 1 };
+
+    let positions = {};
+    let choices = {};
+    let ready = {};
+    let mapFill = {};
+    let activeMapPlayer = null;
+    let selectedTerrain = null;
+    let openDeckCat = null;
+
+    let inCaucus = { 1: false, 2: false };
+    let caucusVisited = { 1: false, 2: false };
+    let caucusActive = false;
+    let caucusDone = false;
+    let returnPos = { 1: null, 2: null };
+    let awaitingReturn = null;
+
+    let meetingsDone = new Set();
+    let currentMeeting = null;
+
+    /* ================= ВЫБОР ПЕРСОНАЖЕЙ ================= */
+
+    function activePlayer() {
+      if (ready[1] && ready[2]) return null;
+      if (!ready[1]) return 1;
+      return 2;
+    }
+
+    function renderGallery() {
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+      const active = activePlayer();
+
+      characters.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = 'character';
+        if (choices[1] === ch.id) card.classList.add('taken-1');
+        if (choices[2] === ch.id) card.classList.add('taken-2');
+        if (active === null) card.classList.add('locked');
+
+        card.innerHTML = `
+          <div class="portrait">${ch.icon}</div>
+          <div class="name">${ch.name}</div>
+          <div class="trait">${ch.trait}</div>
+          <div class="stats">
+            ${statRow('Смелость говорить', ch.speak, 'speak')}
+            ${statRow('Умение слушать',    ch.listen, 'listen')}
+            ${statRow('Готовность уступить', ch.yield, 'yield')}
+          </div>
+        `;
+
+        const portrait = card.querySelector('.portrait');
+        const img = document.createElement('img');
+        img.src = ch.img; img.alt = ch.name;
+        img.onerror = () => img.remove();
+        portrait.appendChild(img);
+
+        card.addEventListener('click', () => pickCharacter(ch.id));
+        gallery.appendChild(card);
+      });
+
+      updateChoosers();
+      updateBanner();
+    }
+
+    function statRow(label, value, cls) {
+      let pips = '';
+      for (let i = 1; i <= 5; i++) pips += `<div class="pip ${i <= value ? 'filled ' + cls : ''}"></div>`;
+      return `<div class="stat"><div class="label"><span>${label}</span><span class="value">${value}/5</span></div><div class="pips">${pips}</div></div>`;
+    }
+
+    function updateChoosers() {
+      const active = activePlayer();
+      [1, 2].forEach(n => {
+        const box = document.getElementById('chooser-' + n);
+        const ch = characters.find(c => c.id === choices[n]);
+        box.classList.toggle('picked', !!ch);
+        box.classList.toggle('ready', !!ready[n]);
+        box.classList.toggle('active', active === n && !ready[n]);
+        box.querySelector('.pick').textContent = ch ? ch.name : 'не выбрал';
+      });
+    }
+
+    function updateBanner() {
+      const banner = document.getElementById('turn-banner');
+      const active = activePlayer();
+      banner.classList.remove('p1', 'p2', 'done');
+      if (active === null) { banner.textContent = 'Оба готовы! ✓'; banner.classList.add('done'); }
+      else if (active === 1) { banner.textContent = 'Сейчас выбирает Участник 1 ↓'; banner.classList.add('p1'); }
+      else { banner.textContent = 'Сейчас выбирает Участник 2 ↓'; banner.classList.add('p2'); }
+    }
+
+    function pickCharacter(id) {
+      const player = activePlayer();
+      if (player === null) return;
+      choices[player] = id;
+      renderGallery();
+      checkComplete();
+    }
+
+    function resetChoice(player) {
+      if (ready[player]) return;
+      delete choices[player];
+      renderGallery();
+      checkComplete();
+    }
+
+    function confirmChoice(player) {
+      if (!choices[player]) return;
+      ready[player] = true;
+      renderGallery();
+      checkComplete();
+    }
+
+    function checkComplete() {
+      const status = document.getElementById('status');
+      if (ready[1] && ready[2]) {
+        const name1 = characters.find(c => c.id === choices[1]).name;
+        const name2 = characters.find(c => c.id === choices[2]).name;
+        status.innerHTML = `Выбор сделан! Участник 1: <strong>${name1}</strong> · Участник 2: <strong>${name2}</strong>`;
+        setTimeout(showMapScreen, 900);
+      } else {
+        status.textContent = '';
+      }
+    }
+
+    /* ================= КАРТА ================= */
+
+    function showMapScreen() {
+      document.getElementById('screen-select').classList.remove('active');
+      document.getElementById('screen-map').classList.add('active');
+
+      positions = {
+        1: { row: 2, col: 0 },
+        2: { row: 3, col: MAP_COLS - 1 },
+      };
+
+      returnPos = { 1: null, 2: null };
+      inCaucus = { 1: false, 2: false };
+      caucusVisited = { 1: false, 2: false };
+      caucusActive = false;
+      caucusDone = false;
+      awaitingReturn = null;
+
+      fillPlayerBadges();
+      buildMap();
+      updateMapHint();
+    }
+
+    function fillPlayerBadges() {
+      [1, 2].forEach(n => {
+        const ch = characters.find(c => c.id === choices[n]);
+        if (!ch) return;
+        document.getElementById('pname-' + n).textContent = ch.name;
+        const avatar = document.getElementById('avatar-' + n);
+        avatar.innerHTML = ch.icon;
+        const img = document.createElement('img');
+        img.src = ch.img; img.alt = ch.name;
+        img.onerror = () => img.remove();
+        avatar.appendChild(img);
+      });
+    }
+
+    function buildMap() {
+      const map = document.getElementById('map');
+      map.innerHTML = '';
+      map.style.gridTemplateColumns = `repeat(${MAP_COLS}, auto)`;
+      map.style.gridTemplateRows = `repeat(${MAP_ROWS}, auto)`;
+
+      for (let row = 0; row < MAP_ROWS; row++) {
+        for (let col = 0; col < MAP_COLS; col++) {
+          const cell = document.createElement('div');
+          cell.className = 'map-cell';
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+
+          if (row === HUT.row && col === HUT.col) {
+  cell.classList.add('hut-cell');
+  cell.innerHTML = `
+    <img class="hut-img" src="hut.png" alt="Хижина кокуса"
+         onerror="this.style.display='none'; this.parentElement.classList.add('no-img');">
+    <div class="hut-icon">🏠</div>
+    <div class="hut-label">Хижина кокуса</div>
+  `;
+  cell.addEventListener('click', () => onHutClick());
+} else {
+  cell.addEventListener('click', () => onCellClick(row, col));
+}
+
+          map.appendChild(cell);
+        }
+      }
+
+      refreshMap();
+    }
+
+    function refreshMap() {
+      const map = document.getElementById('map');
+      const cells = map.children;
+
+      for (let row = 0; row < MAP_ROWS; row++) {
+        for (let col = 0; col < MAP_COLS; col++) {
+          const cell = cells[row * MAP_COLS + col];
+          const key = row + ',' + col;
+          const t = mapFill[key];
+          const isHut = (row === HUT.row && col === HUT.col);
+
+          cell.classList.remove('filled', 'cat-obstacle', 'cat-resource', 'cat-point', 'valid-target', 'return-cell', 'meeting-cell');
+
+          if (!isHut) cell.innerHTML = '';
+
+          if (t && !isHut) {
+            cell.classList.add('filled', 'cat-' + t.cat);
+            cell.innerHTML = `
+              <div class="terrain-drawing">
+                <img class="terrain-img" src="${t.id}.png" alt="${t.name}"
+                     onerror="this.style.display='none';">
+                <div class="draw draw-${t.id}"></div>
+                <div class="tlabel">${t.name}</div>
+              </div>
+            `;
+          }
+
+          if (selectedTerrain && !t && !isHut && activeMapPlayer && !inCaucus[activeMapPlayer]) {
+            const ap = positions[activeMapPlayer];
+            const dist = Math.abs(ap.row - row) + Math.abs(ap.col - col);
+            if (dist === 1) cell.classList.add('valid-target');
+          }
+
+          if (isHut) {
+            cell.classList.toggle('hut-done', caucusDone);
+          }
+        }
+      }
+
+      if (awaitingReturn !== null) {
+        const rp = returnPos[awaitingReturn];
+        if (rp) {
+          cells[rp.row * MAP_COLS + rp.col].classList.add('return-cell');
+        }
+      }
+
+      [1, 2].forEach(n => {
+        const p = positions[n];
+        if (!p) return;
+        const cell = cells[p.row * MAP_COLS + p.col];
+        cell.appendChild(makeToken(n));
+      });
+
+      const m = currentMeeting;
+      if (m) {
+        cells[m.r1 * MAP_COLS + m.c1].classList.add('meeting-cell');
+        cells[m.r2 * MAP_COLS + m.c2].classList.add('meeting-cell');
+      }
+
+      updateMeetingBanner();
+    }
+
+    function makeToken(n) {
+      const ch = characters.find(c => c.id === choices[n]);
+      const token = document.createElement('div');
+      token.className = 'token p' + n;
+      token.innerHTML = ch ? ch.icon : '?';
+      if (ch) {
+        const img = document.createElement('img');
+        img.src = ch.img; img.alt = ch.name;
+        img.onerror = () => img.remove();
+        token.appendChild(img);
+      }
+      return token;
+    }
+
+    /* ================= КОКУС ================= */
+
+    function other(n) { return n === 1 ? 2 : 1; }
+
+    function onHutClick() {
+      if (!activeMapPlayer) {
+        updateMapHint('Сначала нажмите на иконку своего персонажа сверху!');
+        return;
+      }
+
+      if (caucusDone) {
+        caucusDone = false;
+        caucusActive = true;
+        caucusVisited = { 1: false, 2: false };
+      }
+
+      const n = activeMapPlayer;
+
+      if (!caucusActive) {
+        caucusActive = true;
+        caucusVisited = { 1: false, 2: false };
+      }
+
+      if (caucusVisited[n]) {
+        updateMapHint(`Участник ${n} уже был в кокусе. ${caucusVisited[other(n)] ? 'Кокус завершён — нажмите на хижину, чтобы начать новый.' : 'Дождитесь второго участника.'}`);
+        return;
+      }
+
+      if (inCaucus[1] || inCaucus[2]) {
+        updateMapHint('Сейчас в хижине уже кто-то есть. Завершите текущий кокус.');
+        return;
+      }
+
+      returnPos[n] = { ...positions[n] };
+      inCaucus[n] = true;
+      caucusVisited[n] = true;
+      positions[n] = { row: HUT.row, col: HUT.col };
+
+      refreshMap();
+      updateMapHint(`Участник ${n} ушёл в кокус. Второй участник остаётся на месте.`);
+    }
+
+    function selectPlayerOnMap(n) {
+      if (inCaucus[n]) {
+        if (!returnPos[n]) {
+          updateMapHint(`Участник ${n} в кокусе, но не найдена клетка возврата.`);
+          return;
+        }
+        awaitingReturn = n;
+        activeMapPlayer = n;
+        selectedTerrain = null;
+        closeFan();
+
+        [1, 2].forEach(i => {
+          document.getElementById('badge-' + i).classList.toggle('active-turn', i === n);
+        });
+
+        updateMapHint(`Участник <strong>${n}</strong>: нажмите на подсвеченную клетку возврата, чтобы вернуться на поле.`);
+        refreshMap();
+        return;
+      }
+
+      activeMapPlayer = n;
+      selectedTerrain = null;
+      awaitingReturn = null;
+      closeFan();
+
+      [1, 2].forEach(i => {
+        document.getElementById('badge-' + i).classList.toggle('active-turn', i === n);
+      });
+
+      updateMapHint();
+      refreshMap();
+    }
+
+    function onCellClick(row, col) {
+      if (awaitingReturn !== null) {
+        const rp = returnPos[awaitingReturn];
+        if (rp && rp.row === row && rp.col === col) {
+          const returned = awaitingReturn;
+          awaitingReturn = null;
+
+          positions[returned] = { row, col };
+          inCaucus[returned] = false;
+
+          const otherPlayer = other(returned);
+
+          if (!caucusVisited[otherPlayer]) {
+            returnPos[otherPlayer] = { ...positions[otherPlayer] };
+            inCaucus[otherPlayer] = true;
+            caucusVisited[otherPlayer] = true;
+            positions[otherPlayer] = { row: HUT.row, col: HUT.col };
+
+            updateMapHint(`Участник ${returned} вернулся. Участник ${otherPlayer} автоматически ушёл в кокус.`);
+          } else {
+            caucusDone = true;
+            caucusActive = false;
+            updateMapHint(`Участник ${returned} вернулся. Кокус завершён. Чтобы начать новый, нажмите на хижину.`);
+          }
+
+          refreshMap();
+          return;
+        } else {
+          updateMapHint('Нажмите на подсвеченную зелёную клетку возврата.');
+          return;
+        }
+      }
+
+      if (!activeMapPlayer) {
+        updateMapHint('Сначала нажмите на иконку своего персонажа сверху!');
+        return;
+      }
+      if (inCaucus[activeMapPlayer]) {
+        updateMapHint(`Участник ${activeMapPlayer} в кокусе. Нажмите на его иконку, чтобы вернуться.`);
+        return;
+      }
+      if (!selectedTerrain) {
+        updateMapHint('Теперь выберите карточку: нажмите на колоду внизу.');
+        return;
+      }
+
+      const key = row + ',' + col;
+      if (mapFill[key]) {
+        updateMapHint('Эта клетка уже занята — выберите свободную.');
+        return;
+      }
+
+      const p = positions[activeMapPlayer];
+      const dist = Math.abs(p.row - row) + Math.abs(p.col - col);
+
+      if (dist !== 1) {
+        updateMapHint('Карточку можно положить только на соседнюю клетку — вверх, вниз, влево или вправо.');
+        return;
+      }
+
+      mapFill[key] = selectedTerrain;
+      positions[activeMapPlayer] = { row, col };
+
+      const player = activeMapPlayer;
+      selectedTerrain = null;
+
+      checkMeeting();
+
+      refreshMap();
+      updateMapHint(`Участник ${player} вошёл в рельеф. Выберите следующую карточку или передайте ход.`);
+    }
+
+    /* ================= ВСТРЕЧА ================= */
+
+    function checkMeeting() {
+      const p1 = positions[1];
+      const p2 = positions[2];
+      if (!p1 || !p2) { currentMeeting = null; return; }
+      if (inCaucus[1] || inCaucus[2]) { currentMeeting = null; return; }
+
+      const t1 = mapFill[p1.row + ',' + p1.col];
+      const t2 = mapFill[p2.row + ',' + p2.col];
+
+      if (!t1 || !t2) { currentMeeting = null; return; }
+      if (t1.cat !== 'point' || t2.cat !== 'point') { currentMeeting = null; return; }
+
+      const a = `${p1.row},${p1.col}`;
+      const b = `${p2.row},${p2.col}`;
+      const key = [a, b].sort().join('|');
+
+      if (meetingsDone.has(key)) { currentMeeting = null; return; }
+
+      currentMeeting = { r1: p1.row, c1: p1.col, r2: p2.row, c2: p2.col, key };
+    }
+
+    function updateMeetingBanner() {
+      const banner = document.getElementById('meeting-banner');
+      if (currentMeeting && !document.getElementById('meeting-modal').classList.contains('show')) {
+        banner.classList.add('show');
+      } else {
+        banner.classList.remove('show');
+      }
+    }
+
+    function openMeeting() {
+      if (!currentMeeting) return;
+      const p1pos = positions[1];
+      const p2pos = positions[2];
+      const t1 = mapFill[p1pos.row + ',' + p1pos.col];
+      const t2 = mapFill[p2pos.row + ',' + p2pos.col];
+
+      const pair = [t1.id, t2.id].sort().join('+');
+
+      const texts = {
+        'campfire+campfire': 'Два костра сливаются в один большой. Стороны сидят у общего огня и впервые за долгое время говорят не в сторону, а друг с другом. Здесь можно согреться и услышать.',
+        'bridge+bridge': 'Два моста встречаются посередине. Теперь путь открыт в обе стороны, и никто не стоит на краю. Можно сделать шаг навстречу — и другая сторона тоже сделает шаг.',
+        'meadow+meadow': 'Две поляны соединяются в широкий луг. Здесь просторно, не тесно и не страшно. Можно выдохнуть, отложить обиды и просто поговорить.',
+        'bridge+campfire': 'Стороны сходятся на мосту, а неподалёку горит костёр. Мост помогает перейти, костёр — согреться и поговорить. Вместе это путь и место для разговора.',
+        'campfire+meadow': 'Костёр на поляне — тепло и простор. Здесь можно и согреться, и передохнуть, и уступить, не чувствуя, что проиграл.',
+        'bridge+meadow': 'Мост ведёт к поляне. Сначала — трудный шаг навстречу, потом — отдых и разговор. Переход, после которого легче дышать.',
+      };
+
+      const priority = ['campfire', 'bridge', 'meadow'];
+      let main = t1;
+      for (const id of priority) {
+        if (t1.id === id) { main = t1; break; }
+        if (t2.id === id) { main = t2; break; }
+      }
+
+      let title = main.name;
+      if (t1.id !== t2.id) {
+        const otherT = (main === t1) ? t2 : t1;
+        title = main.name + ' и ' + otherT.name;
+      }
+
+      document.getElementById('mc-title').textContent = title;
+      document.getElementById('mc-icon').textContent = main.icon;
+
+      const text = texts[pair] || 'Стороны встретились в точке встречи и готовы говорить.';
+      document.getElementById('mc-text').textContent = text;
+
+      document.getElementById('meeting-modal').classList.add('show');
+      document.getElementById('meeting-banner').classList.remove('show');
+    }
+
+    function closeMeeting() {
+      document.getElementById('meeting-modal').classList.remove('show');
+      if (currentMeeting) {
+        meetingsDone.add(currentMeeting.key);
+        currentMeeting = null;
+      }
+      refreshMap();
+    }
+
+    function closeCaucus() {
+      document.getElementById('caucus-modal').classList.remove('show');
+    }
+
+    /* ================= ХОД ================= */
+
+    function updateMapHint(text) {
+      const el = document.getElementById('map-hint');
+      if (!text) {
+        if (!activeMapPlayer) {
+          el.textContent = 'Нажмите на иконку своего персонажа сверху, чтобы начать ход';
+        } else if (selectedTerrain) {
+          el.innerHTML = `Участник <strong>${activeMapPlayer}</strong>: кликните по свободной клетке на карте`;
+        } else {
+          el.innerHTML = `Участник <strong>${activeMapPlayer}</strong>: нажмите на колоду внизу, чтобы взять карточку`;
+        }
+      } else {
+        el.innerHTML = text;
+      }
+    }
+
+    /* ================= КОЛОДЫ И ВЕЕР ================= */
+
+    function openDeck(cat) {
+      if (openDeckCat === cat) { closeFan(); return; }
+      openDeckCat = cat;
+
+      ['obstacle', 'resource', 'point'].forEach(c => {
+        document.getElementById('deck-' + c).classList.toggle('selected', c === cat);
+      });
+
+      const fan = document.getElementById('fan');
+      const cards = terrains.filter(t => t.cat === cat);
+      const n = cards.length;
+      fan.innerHTML = '<button class="fan-close" onclick="closeFan()">✕ закрыть</button>';
+
+      const overlap = 78;
+      const totalWidth = (n - 1) * overlap;
+      const startX = -totalWidth / 2;
+      const maxRotate = 10;
+
+      cards.forEach((t, i) => {
+        const card = document.createElement('div');
+        card.className = 'fan-card';
+        card.innerHTML = `
+          <div class="fc-icon">${t.icon}</div>
+          <div class="fc-name">${t.name}</div>
+          <div class="fc-desc">${t.desc}</div>
+        `;
+
+        const offsetX = startX + i * overlap;
+        const t01 = n > 1 ? i / (n - 1) : 0.5;
+        const rot = (t01 - 0.5) * 2 * maxRotate;
+        const lift = Math.abs(t01 - 0.5) * 2 * 12;
+
+        card.style.setProperty('--tx', offsetX + 'px');
+        card.style.setProperty('--rot', rot + 'deg');
+        card.style.transform = `translateX(${offsetX}px) rotate(${rot}deg) translateY(${lift}px)`;
+        card.style.zIndex = 10 + i;
+        card.style.marginLeft = '-55px';
+
+        card.addEventListener('click', () => pickTerrainFromFan(t.id));
+        fan.appendChild(card);
+      });
+
+      fan.classList.add('open');
+    }
+
+    function closeFan() {
+      openDeckCat = null;
+      const fan = document.getElementById('fan');
+      fan.classList.remove('open');
+      fan.innerHTML = '';
+      ['obstacle', 'resource', 'point'].forEach(c => {
+        document.getElementById('deck-' + c).classList.remove('selected');
+      });
+    }
+
+    function pickTerrainFromFan(id) {
+      if (!activeMapPlayer) {
+        updateMapHint('Сначала нажмите на иконку своего персонажа сверху!');
+        return;
+      }
+      if (inCaucus[activeMapPlayer]) {
+        updateMapHint(`Участник ${activeMapPlayer} в кокусе. Нажмите на его иконку, чтобы вернуться.`);
+        return;
+      }
+      selectedTerrain = terrains.find(t => t.id === id);
+      closeFan();
+      updateMapHint();
+      refreshMap();
+    }
+
+    /* ================= ЗАВЕРШЕНИЕ ================= */
+
+    function openFinish() {
+      const ch1 = characters.find(c => c.id === choices[1]);
+      const ch2 = characters.find(c => c.id === choices[2]);
+      document.getElementById('finish-sub').textContent =
+        (ch1 ? ch1.name : 'Участник 1') + ' и ' + (ch2 ? ch2.name : 'Участник 2');
+
+      drawFinishCanvasAsync().then(() => {
+        document.getElementById('finish-modal').classList.add('show');
+      });
+    }
+
+    function closeFinish() {
+      document.getElementById('finish-modal').classList.remove('show');
+    }
+
+    // Асинхронная отрисовка «фотографии»: ждём загрузки картинок рельефа и портретов
+    function drawFinishCanvasAsync() {
+      return new Promise(resolve => {
+        const canvas = document.getElementById('finish-canvas');
+        const ctx = canvas.getContext('2d');
+
+        const cols = MAP_COLS;
+        const rows = MAP_ROWS;
+        const cw = canvas.width / cols;
+        const chh = canvas.height / rows;
+
+        ctx.fillStyle = '#2c4a34';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Фон клеток + названия
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = col * cw;
+            const y = row * chh;
+            const key = row + ',' + col;
+            const t = mapFill[key];
+            const isHut = (row === HUT.row && col === HUT.col);
+
+            if (isHut) ctx.fillStyle = '#3a2a10';
+            else if (t) {
+              if (t.cat === 'obstacle') ctx.fillStyle = '#4a2b28';
+              else if (t.cat === 'resource') ctx.fillStyle = '#234a2c';
+              else ctx.fillStyle = '#4a3d1c';
+            } else ctx.fillStyle = '#3a5e44';
+            ctx.fillRect(x + 1, y + 1, cw - 2, chh - 2);
+
+            if (isHut) {
+  // фон хижины
+  ctx.fillStyle = '#3a2a10';
+  ctx.fillRect(x + 1, y + 1, cw - 2, chh - 2);
+  // картинка грузится ниже вместе с рельефом (см. terrainPositions)
+  continue;
+}
+
+            if (t) {
+              ctx.fillStyle = '#fff';
+              ctx.font = 'bold ' + Math.floor(chh * 0.14) + 'px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const words = t.name.split(' ');
+              const lines = [];
+              let line = '';
+              for (const w of words) {
+                if ((line + ' ' + w).trim().length > 10 && line) { lines.push(line); line = w; }
+                else { line = (line + ' ' + w).trim(); }
+              }
+              if (line) lines.push(line);
+              const lh = chh * 0.14;
+              const startY = y + chh * 0.85 - (lines.length - 1) * lh / 2;
+              lines.forEach((ln, i) => ctx.fillText(ln, x + cw / 2, startY + i * lh));
+            }
+          }
+        }
+
+        // Загрузка картинок рельефа
+        const terrainPositions = [];
+for (let row = 0; row < rows; row++) {
+  for (let col = 0; col < cols; col++) {
+    const key = row + ',' + col;
+    const t = mapFill[key];
+    const isHut = (row === HUT.row && col === HUT.col);
+    if (!t && !isHut) continue;
+    if (isHut) {
+      terrainPositions.push({ row, col, t: { id: 'hut', name: 'Хижина кокуса' } });
+      continue;
+    }
+    terrainPositions.push({ row, col, t });
+  }
+}
+
+        const terrainPromises = terrainPositions.map(tp => {
+          return new Promise(res => {
+            const img = new Image();
+            img.onload = () => res({ ...tp, img });
+            img.onerror = () => res({ ...tp, img: null });
+            img.src = tp.t.id + '.png';
+          });
+        });
+
+        Promise.all(terrainPromises).then(terrainResults => {
+          // Рисуем картинки рельефа
+          terrainResults.forEach(tr => {
+            if (!tr.img) return;
+            const x = tr.col * cw;
+            const y = tr.row * chh;
+            ctx.drawImage(tr.img, x + 1, y + 1, cw - 2, chh - 2);
+            // Затемнение внизу, чтобы название читалось
+            const grd = ctx.createLinearGradient(0, y + chh * 0.6, 0, y + chh);
+            grd.addColorStop(0, 'rgba(0,0,0,0)');
+            grd.addColorStop(1, 'rgba(0,0,0,0.7)');
+            ctx.fillStyle = grd;
+            ctx.fillRect(x + 1, y + chh * 0.6, cw - 2, chh * 0.4 - 1);
+          });
+
+          // Перерисовываем названия поверх картинок
+          for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+              const key = row + ',' + col;
+              const t = mapFill[key];
+              if (!t) continue;
+              if (row === HUT.row && col === HUT.col) continue;
+              const x = col * cw;
+              const y = row * chh;
+              ctx.fillStyle = '#fff';
+              ctx.font = 'bold ' + Math.floor(chh * 0.14) + 'px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const words = t.name.split(' ');
+              const lines = [];
+              let line = '';
+              for (const w of words) {
+                if ((line + ' ' + w).trim().length > 10 && line) { lines.push(line); line = w; }
+                else { line = (line + ' ' + w).trim(); }
+              }
+              if (line) lines.push(line);
+              const lh = chh * 0.14;
+              const startY = y + chh * 0.85 - (lines.length - 1) * lh / 2;
+              lines.forEach((ln, i) => ctx.fillText(ln, x + cw / 2, startY + i * lh));
+            }
+          }
+
+          // Портреты персонажей над клетками
+          const imgPromises = [1, 2].map(n => {
+            return new Promise(res => {
+              const p = positions[n];
+              if (!p) { res(null); return; }
+              const ch = characters.find(c => c.id === choices[n]);
+              if (!ch) { res({ n, p, ch, img: null }); return; }
+
+              const img = new Image();
+              img.onload = () => res({ n, p, ch, img });
+              img.onerror = () => res({ n, p, ch, img: null });
+              img.src = ch.img;
+            });
+          });
+
+          Promise.all(imgPromises).then(results => {
+            results.forEach(r => {
+              if (!r) return;
+              const { n, p, ch, img } = r;
+
+              const cellX = p.col * cw;
+              const cellY = p.row * chh;
+              const rad = Math.min(cw, chh) * 0.42;
+              const cx = cellX + cw / 2;
+              const cy = Math.max(rad + 4, cellY - rad - 6);
+
+              ctx.beginPath();
+              ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+              ctx.fillStyle = '#0d1a12';
+              ctx.fill();
+              ctx.lineWidth = 4;
+              ctx.strokeStyle = n === 1 ? '#e07a5f' : '#5fa8e0';
+              ctx.stroke();
+
+              if (img) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, rad - 2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(img, cx - rad + 2, cy - rad + 2, (rad - 2) * 2, (rad - 2) * 2);
+                ctx.restore();
+                ctx.beginPath();
+                ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = n === 1 ? '#e07a5f' : '#5fa8e0';
+                ctx.stroke();
+              } else if (ch) {
+                ctx.font = Math.floor(rad * 1.1) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(ch.icon, cx, cy);
+              }
+
+              ctx.fillStyle = n === 1 ? '#e07a5f' : '#5fa8e0';
+              ctx.font = 'bold ' + Math.floor(rad * 0.6) + 'px Arial';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(n === 1 ? '1' : '2', cx, cy + rad + rad * 0.55);
+            });
+
+            resolve();
+          });
+        });
+      });
+    }
+
+    function saveFinish() {
+      const canvas = document.getElementById('finish-canvas');
+      try {
+        const link = document.createElement('a');
+        link.download = 'karta-mediacii.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+
+        document.getElementById('finish-modal').classList.remove('show');
+        openResults();
+      } catch (e) {
+        alert('Не удалось сохранить картинку: ' + e.message + '\n\nПопробуйте открыть сайт через Live Server или хостинг.');
+        console.error(e);
+      }
+    }
+
+    /* ================= ИТОГИ ================= */
+
+    function openResults() {
+      const ch1 = characters.find(c => c.id === choices[1]);
+      const ch2 = characters.find(c => c.id === choices[2]);
+      document.getElementById('res-participants').value =
+        (ch1 ? ch1.name : 'Участник 1') + ' и ' + (ch2 ? ch2.name : 'Участник 2');
+
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('res-date').value = today;
+
+      document.getElementById('results-modal').classList.add('show');
+    }
+
+    function getResultsData() {
+      return {
+        participants: document.getElementById('res-participants').value,
+        date: document.getElementById('res-date').value,
+        topic: document.getElementById('res-topic').value.trim() || '—',
+        decision: document.getElementById('res-decision').value.trim() || '—',
+        agreements: document.getElementById('res-agreements').value.trim() || '—',
+        steps: document.getElementById('res-steps').value.trim() || '—',
+        signature: document.getElementById('res-signature').value.trim() || '—',
+      };
+    }
+
+    function saveResultsImage() {
+      const d = getResultsData();
+      const canvas = document.createElement('canvas');
+      canvas.width = 900;
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#1a2a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#ffd76a';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+
+      ctx.fillStyle = '#ffe9a8';
+      ctx.font = 'bold 42px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Итоги встречи', canvas.width / 2, 100);
+
+      ctx.fillStyle = '#b8f0b3';
+      ctx.font = 'bold 24px Arial';
+      ctx.fillText(d.participants, canvas.width / 2, 150);
+
+      ctx.fillStyle = '#a8c0a8';
+      ctx.font = '18px Arial';
+      ctx.fillText('Дата: ' + d.date, canvas.width / 2, 190);
+
+      const fields = [
+        { label: 'Тема', value: d.topic },
+        { label: 'Решение', value: d.decision },
+        { label: 'Договорённости', value: d.agreements },
+        { label: 'Следующие шаги', value: d.steps },
+      ];
+
+      let y = 250;
+      fields.forEach(f => {
+        ctx.fillStyle = '#ffd76a';
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(f.label + ':', 60, y);
+        y += 32;
+
+        ctx.fillStyle = '#eee';
+        ctx.font = '18px Arial';
+        const lines = wrapText(ctx, f.value, canvas.width - 120);
+        lines.forEach(line => {
+          ctx.fillText(line, 60, y);
+          y += 26;
+        });
+        y += 20;
+      });
+
+      ctx.fillStyle = '#ffd76a';
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('Подпись медиатора:', 60, y);
+      y += 32;
+      ctx.fillStyle = '#eee';
+      ctx.font = '20px Arial';
+      ctx.fillText(d.signature, 60, y);
+
+      const link = document.createElement('a');
+      link.download = 'itogi-vstrechi.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    function wrapText(ctx, text, maxWidth) {
+      const words = text.split(' ');
+      const lines = [];
+      let line = '';
+      for (const w of words) {
+        const test = (line + ' ' + w).trim();
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    function saveResultsText() {
+      const d = getResultsData();
+      const text =
+        'ИТОГИ ВСТРЕЧИ\n' +
+        '================\n\n' +
+        'Участники: ' + d.participants + '\n' +
+        'Дата: ' + d.date + '\n\n' +
+        'Тема:\n' + d.topic + '\n\n' +
+        'Решение:\n' + d.decision + '\n\n' +
+        'Договорённости:\n' + d.agreements + '\n\n' +
+        'Следующие шаги:\n' + d.steps + '\n\n' +
+        'Подпись медиатора:\n' + d.signature + '\n';
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const link = document.createElement('a');
+      link.download = 'itogi-vstrechi.txt';
+      link.href = URL.createObjectURL(blob);
+      link.click();
+    }
+
+    function startNewGame() {
+      // Закрываем все модалки
+      document.getElementById('results-modal').classList.remove('show');
+      document.getElementById('finish-modal').classList.remove('show');
+      document.getElementById('meeting-modal').classList.remove('show');
+      document.getElementById('caucus-modal').classList.remove('show');
+
+      // Сбрасываем состояние
+      choices = {};
+      ready = {};
+      positions = {};
+      mapFill = {};
+      activeMapPlayer = null;
+      selectedTerrain = null;
+      openDeckCat = null;
+
+      inCaucus = { 1: false, 2: false };
+      caucusVisited = { 1: false, 2: false };
+      caucusActive = false;
+      caucusDone = false;
+      returnPos = { 1: null, 2: null };
+      awaitingReturn = null;
+
+      meetingsDone = new Set();
+      currentMeeting = null;
+
+      // Очищаем поля итогов
+      document.getElementById('res-topic').value = '';
+      document.getElementById('res-decision').value = '';
+      document.getElementById('res-agreements').value = '';
+      document.getElementById('res-steps').value = '';
+      document.getElementById('res-signature').value = '';
+
+      // Показываем экран выбора
+      document.getElementById('screen-map').classList.remove('active');
+      document.getElementById('screen-select').classList.add('active');
+
+      // Перерисовываем галерею
+      renderGallery();
+    }
+
+    renderGallery();
+  </script>
+
+</body>
+</html>
