@@ -779,7 +779,6 @@
       </div>
 
       <div class="finish-actions">
-        <button class="save-btn" onclick="saveResultsImage()">💾 Сохранить картинку</button>
         <button class="save-btn" onclick="saveResultsText()">📄 Сохранить текст</button>
         <button class="back-btn" onclick="startNewGame()">🔄 Новая игра</button>
       </div>
@@ -1666,87 +1665,111 @@ for (let row = 0; row < rows; row++) {
     }
 
     function saveResultsImage() {
-      const d = getResultsData();
-      const canvas = document.createElement('canvas');
-      canvas.width = 900;
-      canvas.height = 1200;
-      const ctx = canvas.getContext('2d');
+  const d = getResultsData();
 
-      ctx.fillStyle = '#1a2a1a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // --- 1. Считаем layout на временном canvas ---
+  const meas = document.createElement('canvas').getContext('2d');
+  const PAD = 60;
+  const W = 900;
+  const INNER = W - PAD * 2;
 
-      ctx.strokeStyle = '#ffd76a';
-      ctx.lineWidth = 6;
-      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+  const fields = [
+    { label: 'Тема',            value: d.topic },
+    { label: 'Решение',         value: d.decision },
+    { label: 'Договорённости',  value: d.agreements },
+    { label: 'Следующие шаги',  value: d.steps },
+  ];
 
-      ctx.fillStyle = '#ffe9a8';
-      ctx.font = 'bold 42px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Итоги встречи', canvas.width / 2, 100);
+  meas.font = '18px Arial';
+  const wrapped = fields.map(f => ({
+    ...f,
+    lines: wrapText(meas, f.value, INNER)
+  }));
 
-      ctx.fillStyle = '#b8f0b3';
-      ctx.font = 'bold 24px Arial';
-      ctx.fillText(d.participants, canvas.width / 2, 150);
+  // Высота: шапка + поля + подпись + отступы
+  let contentH = 230;
+  wrapped.forEach(f => { contentH += 32 + f.lines.length * 26 + 20; });
+  contentH += 32 + 40;
+  const H = Math.max(1200, contentH + PAD * 2);
 
-      ctx.fillStyle = '#a8c0a8';
-      ctx.font = '18px Arial';
-      ctx.fillText('Дата: ' + d.date, canvas.width / 2, 190);
+  // --- 2. Создаём canvas нужной высоты ---
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
 
-      const fields = [
-        { label: 'Тема', value: d.topic },
-        { label: 'Решение', value: d.decision },
-        { label: 'Договорённости', value: d.agreements },
-        { label: 'Следующие шаги', value: d.steps },
-      ];
+  ctx.fillStyle = '#1a2a1a';
+  ctx.fillRect(0, 0, W, H);
 
-      let y = 250;
-      fields.forEach(f => {
-        ctx.fillStyle = '#ffd76a';
-        ctx.font = 'bold 22px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(f.label + ':', 60, y);
-        y += 32;
+  ctx.strokeStyle = '#ffd76a';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(20, 20, W - 40, H - 40);
 
-        ctx.fillStyle = '#eee';
-        ctx.font = '18px Arial';
-        const lines = wrapText(ctx, f.value, canvas.width - 120);
-        lines.forEach(line => {
-          ctx.fillText(line, 60, y);
-          y += 26;
-        });
-        y += 20;
-      });
+  ctx.fillStyle = '#ffe9a8';
+  ctx.font = 'bold 42px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Итоги встречи', W / 2, 100);
 
-      ctx.fillStyle = '#ffd76a';
-      ctx.font = 'bold 22px Arial';
-      ctx.fillText('Подпись медиатора:', 60, y);
-      y += 32;
-      ctx.fillStyle = '#eee';
-      ctx.font = '20px Arial';
-      ctx.fillText(d.signature, 60, y);
+  ctx.fillStyle = '#b8f0b3';
+  ctx.font = 'bold 24px Arial';
+  ctx.fillText(d.participants, W / 2, 150);
 
-      const link = document.createElement('a');
-      link.download = 'itogi-vstrechi.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    }
+  ctx.fillStyle = '#a8c0a8';
+  ctx.font = '18px Arial';
+  ctx.fillText('Дата: ' + d.date, W / 2, 190);
+
+  let y = 250;
+  wrapped.forEach(f => {
+    ctx.fillStyle = '#ffd76a';
+    ctx.font = 'bold 22px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(f.label + ':', PAD, y);
+    y += 32;
+
+    ctx.fillStyle = '#eee';
+    ctx.font = '18px Arial';
+    f.lines.forEach(line => {
+      ctx.fillText(line, PAD, y);
+      y += 26;
+    });
+    y += 20;
+  });
+
+  ctx.fillStyle = '#ffd76a';
+  ctx.font = 'bold 22px Arial';
+  ctx.fillText('Подпись медиатора:', PAD, y);
+  y += 32;
+  ctx.fillStyle = '#eee';
+  ctx.font = '20px Arial';
+  ctx.fillText(d.signature, PAD, y);
+
+  const link = document.createElement('a');
+  link.download = 'itogi-vstrechi.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
 
     function wrapText(ctx, text, maxWidth) {
-      const words = text.split(' ');
-      const lines = [];
-      let line = '';
-      for (const w of words) {
-        const test = (line + ' ' + w).trim();
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = w;
-        } else {
-          line = test;
-        }
+  const result = [];
+  const paragraphs = String(text).split('\n');
+
+  for (const para of paragraphs) {
+    if (para === '') { result.push(''); continue; }
+    const words = para.split(' ');
+    let line = '';
+    for (const w of words) {
+      const test = (line + ' ' + w).trim();
+      if (ctx.measureText(test).width > maxWidth && line) {
+        result.push(line);
+        line = w;
+      } else {
+        line = test;
       }
-      if (line) lines.push(line);
-      return lines;
     }
+    if (line) result.push(line);
+  }
+  return result;
+}
 
     function saveResultsText() {
       const d = getResultsData();
